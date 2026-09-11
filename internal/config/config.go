@@ -43,10 +43,47 @@ func (conf AuthConfig) Validate() error {
 	return nil
 }
 
+type SMTPConfig struct {
+	Host     string `json:"host" mapstructure:"host"`
+	Port     int    `json:"port" mapstructure:"port"`
+	Username string `json:"username" mapstructure:"username"`
+	Password string `json:"password" mapstructure:"password"`
+	From     string `json:"from" mapstructure:"from"`
+}
+
+func (conf SMTPConfig) Validate() error {
+	if conf.Host == "" {
+		return errors.New("must supply smtp host")
+	}
+	if conf.From == "" {
+		return errors.New("must supply smtp from address")
+	}
+	return nil
+}
+
+// PasswordResetConfig configures the "forgot password" email flow.
+type PasswordResetConfig struct {
+	// TokenExpiryMinutes is how long a reset link stays valid after being
+	// emailed.
+	TokenExpiryMinutes int `json:"token-expiry-minutes" mapstructure:"token-expiry-minutes"`
+	// URLBase is the cloud-ui page the reset link points to; the reset
+	// token is appended as a "?token=" query parameter.
+	URLBase string `json:"url-base" mapstructure:"url-base"`
+}
+
+func (conf PasswordResetConfig) Validate() error {
+	if conf.URLBase == "" {
+		return errors.New("must supply password-reset url-base")
+	}
+	return nil
+}
+
 type Config struct {
-	Database DatabaseConfig `json:"database" mapstructure:"database"`
-	Auth     AuthConfig     `json:"auth" mapstructure:"auth"`
-	Port     int            `json:"port" mapstructure:"port"`
+	Database      DatabaseConfig      `json:"database" mapstructure:"database"`
+	Auth          AuthConfig          `json:"auth" mapstructure:"auth"`
+	SMTP          SMTPConfig          `json:"smtp" mapstructure:"smtp"`
+	PasswordReset PasswordResetConfig `json:"password-reset" mapstructure:"password-reset"`
+	Port          int                 `json:"port" mapstructure:"port"`
 }
 
 func (conf Config) Validate() error {
@@ -54,6 +91,12 @@ func (conf Config) Validate() error {
 		return err
 	}
 	if err := conf.Auth.Validate(); err != nil {
+		return err
+	}
+	if err := conf.SMTP.Validate(); err != nil {
+		return err
+	}
+	if err := conf.PasswordReset.Validate(); err != nil {
 		return err
 	}
 	return nil
@@ -79,6 +122,17 @@ func init() {
 	viper.SetDefault("auth.use-token-expiry-minutes", 10)
 	viper.BindEnv("auth.refresh-token-expiry-days")
 	viper.SetDefault("auth.refresh-token-expiry-days", 7)
+
+	viper.BindEnv("smtp.host")
+	viper.BindEnv("smtp.port")
+	viper.SetDefault("smtp.port", 587)
+	viper.BindEnv("smtp.username")
+	viper.BindEnv("smtp.password")
+	viper.BindEnv("smtp.from")
+
+	viper.BindEnv("password-reset.token-expiry-minutes")
+	viper.SetDefault("password-reset.token-expiry-minutes", 30)
+	viper.BindEnv("password-reset.url-base")
 
 	viper.BindEnv("logging.stdout")
 	viper.SetDefault("logging.stdout", true)

@@ -11,6 +11,8 @@ import (
 	"github.com/Kaese72/cloud-user-registry/internal/config"
 	"github.com/Kaese72/cloud-user-registry/internal/groupwebapp"
 	"github.com/Kaese72/cloud-user-registry/internal/logging"
+	"github.com/Kaese72/cloud-user-registry/internal/mailer"
+	"github.com/Kaese72/cloud-user-registry/internal/passwordresetwebapp"
 	"github.com/Kaese72/cloud-user-registry/internal/persistence/mariadb"
 	"github.com/Kaese72/cloud-user-registry/internal/tokens"
 	"github.com/Kaese72/cloud-user-registry/internal/userwebapp"
@@ -51,12 +53,14 @@ func main() {
 	authApp := authwebapp.NewWebApp(dbPersistence, privateKey, config.Loaded.Auth.RefreshSecret, useTokenExpiry, refreshTokenExpiry)
 	userApp := userwebapp.NewWebApp(dbPersistence, &privateKey.PublicKey)
 	groupApp := groupwebapp.NewWebApp(dbPersistence, &privateKey.PublicKey)
+	passwordResetApp := passwordresetwebapp.NewWebApp(dbPersistence, mailer.New(config.Loaded.SMTP), config.Loaded.PasswordReset)
 
 	router := mux.NewRouter()
 	router.Use(middleware.UseTokenMiddleware(
 		&privateKey.PublicKey,
 		"/cloud-user-registry/v0/registration",
 		"/cloud-user-registry/v0/authentication/login",
+		"/cloud-user-registry/v0/authentication/password-reset",
 		"/cloud-user-registry/docs",
 		"/cloud-user-registry/openapi",
 	))
@@ -68,6 +72,9 @@ func main() {
 	huma.Post(api, "/cloud-user-registry/v0/registration", authApp.Register)
 	huma.Post(api, "/cloud-user-registry/v0/authentication/login", authApp.Login)
 	huma.Post(api, "/cloud-user-registry/v0/groups/{groupId:[0-9]+}/select", authApp.SelectGroup)
+
+	huma.Post(api, "/cloud-user-registry/v0/authentication/password-reset", passwordResetApp.RequestReset)
+	huma.Post(api, "/cloud-user-registry/v0/authentication/password-reset/confirm", passwordResetApp.ConfirmReset)
 
 	huma.Get(api, "/cloud-user-registry/v0/users/me", userApp.GetMe)
 	huma.Put(api, "/cloud-user-registry/v0/users/me", userApp.UpdateMe)

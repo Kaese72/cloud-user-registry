@@ -1,6 +1,9 @@
 package persistence
 
-import "context"
+import (
+	"context"
+	"time"
+)
 
 type User struct {
 	ID           int64
@@ -93,4 +96,32 @@ type InvitationPersistenceDB interface {
 	GetInvitation(ctx context.Context, invitationID int64) (Invitation, error)
 	AcceptInvitation(ctx context.Context, invitationID int64, userID int64) error
 	DeclineInvitation(ctx context.Context, invitationID int64, userID int64) error
+}
+
+// PasswordResetPersistenceDB backs the "forgot password" flow: issuing a
+// single-use reset token for a user found by email, and redeeming it once
+// for a new password.
+type PasswordResetPersistenceDB interface {
+	GetUserByEmail(ctx context.Context, email string) (User, error)
+	GetUserByID(ctx context.Context, id int64) (User, error)
+	// CreatePasswordReset stores the hash of a freshly issued reset token.
+	// The raw token itself is never persisted.
+	CreatePasswordReset(ctx context.Context, userID int64, tokenHash string, expiresAt time.Time) error
+	// GetPasswordResetByTokenHash returns the reset record for a token
+	// hash, regardless of whether it has expired or already been used;
+	// callers are expected to check both before honoring it.
+	GetPasswordResetByTokenHash(ctx context.Context, tokenHash string) (PasswordReset, error)
+	// MarkPasswordResetUsed consumes a reset token so it can not be reused.
+	MarkPasswordResetUsed(ctx context.Context, id int64) error
+	UpdatePassword(ctx context.Context, id int64, passwordHash string) error
+}
+
+// PasswordReset is a pending offer for userId to set a new password,
+// redeemable once before expiresAt.
+type PasswordReset struct {
+	ID        int64
+	UserID    int64
+	TokenHash string
+	ExpiresAt time.Time
+	UsedAt    *time.Time
 }

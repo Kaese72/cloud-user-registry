@@ -18,3 +18,17 @@ type LoginRequest struct {
 type LoginResponse struct {
 	UseToken string `json:"use-token"`
 }
+
+// RequestPasswordResetRequest is the payload to trigger a password reset
+// email. The response is identical regardless of whether the email is
+// registered, to avoid leaking which addresses have accounts.
+type RequestPasswordResetRequest struct {
+	Email string `json:"email" format:"email"`
+}
+
+// ResetPasswordRequest redeems a password reset token, sent by email, for a
+// new password.
+type ResetPasswordRequest struct {
+	Token       string `json:"token" minLength:"1"`
+	NewPassword string `json:"newPassword" minLength:"8"`
+}

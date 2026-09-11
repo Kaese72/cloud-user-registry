@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"time"
 
 	"github.com/Kaese72/cloud-user-registry/internal/config"
 	"github.com/Kaese72/cloud-user-registry/internal/logging"
@@ -12,11 +13,12 @@ import (
 )
 
 var (
-	_ persistence.AuthPersistenceDB         = mariadbPersistence{}
-	_ persistence.RegistrationPersistenceDB = mariadbPersistence{}
-	_ persistence.UserPersistenceDB         = mariadbPersistence{}
-	_ persistence.GroupPersistenceDB        = mariadbPersistence{}
-	_ persistence.InvitationPersistenceDB   = mariadbPersistence{}
+	_ persistence.AuthPersistenceDB          = mariadbPersistence{}
+	_ persistence.RegistrationPersistenceDB  = mariadbPersistence{}
+	_ persistence.UserPersistenceDB          = mariadbPersistence{}
+	_ persistence.GroupPersistenceDB         = mariadbPersistence{}
+	_ persistence.InvitationPersistenceDB    = mariadbPersistence{}
+	_ persistence.PasswordResetPersistenceDB = mariadbPersistence{}
 )
 
 type mariadbPersistence struct {
@@ -296,6 +298,44 @@ func (m mariadbPersistence) AcceptInvitation(ctx context.Context, invitationID i
 		return err
 	}
 	return tx.Commit()
+}
+
+func (m mariadbPersistence) GetUserByEmail(ctx context.Context, email string) (persistence.User, error) {
+	row := m.db.QueryRowContext(ctx, `SELECT id, username, name, surname, email, passwordHash FROM users WHERE email = ?`, email)
+	var user persistence.User
+	if err := row.Scan(&user.ID, &user.Username, &user.Name, &user.Surname, &user.Email, &user.PasswordHash); err != nil {
+		return persistence.User{}, err
+	}
+	return user, nil
+}
+
+func (m mariadbPersistence) CreatePasswordReset(ctx context.Context, userID int64, tokenHash string, expiresAt time.Time) error {
+	_, err := m.db.ExecContext(ctx, `INSERT INTO passwordResets (userId, tokenHash, expiresAt) VALUES (?, ?, ?)`, userID, tokenHash, expiresAt)
+	return err
+}
+
+func (m mariadbPersistence) GetPasswordResetByTokenHash(ctx context.Context, tokenHash string) (persistence.PasswordReset, error) {
+	row := m.db.QueryRowContext(ctx, `SELECT id, userId, tokenHash, expiresAt, usedAt FROM passwordResets WHERE tokenHash = ?`, tokenHash)
+	var reset persistence.PasswordReset
+	if err := row.Scan(&reset.ID, &reset.UserID, &reset.TokenHash, &reset.ExpiresAt, &reset.UsedAt); err != nil {
+		return persistence.PasswordReset{}, err
+	}
+	return reset, nil
+}
+
+func (m mariadbPersistence) MarkPasswordResetUsed(ctx context.Context, id int64) error {
+	result, err := m.db.ExecContext(ctx, `UPDATE passwordResets SET usedAt = CURRENT_TIMESTAMP WHERE id = ? AND usedAt IS NULL`, id)
+	if err != nil {
+		return err
+	}
+	n, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
 }
 
 func (m mariadbPersistence) DeclineInvitation(ctx context.Context, invitationID int64, userID int64) error {
