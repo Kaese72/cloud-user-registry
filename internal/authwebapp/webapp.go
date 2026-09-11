@@ -11,6 +11,7 @@ import (
 	"github.com/Kaese72/cloud-user-registry/internal/logging"
 	"github.com/Kaese72/cloud-user-registry/internal/persistence"
 	"github.com/Kaese72/cloud-user-registry/internal/tokens"
+	"github.com/Kaese72/cloud-user-registry/internal/validate"
 	"github.com/Kaese72/cloud-user-registry/restmodels"
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/go-sql-driver/mysql"
@@ -74,6 +75,9 @@ type loginResult struct {
 func (app webApp) Register(ctx context.Context, input *struct {
 	Body restmodels.RegisterRequest
 }) (*loginResult, error) {
+	if err := validate.Email(input.Body.Email); err != nil {
+		return nil, huma.Error400BadRequest("invalid email address")
+	}
 	hash, err := bcrypt.GenerateFromPassword([]byte(input.Body.Password), bcrypt.DefaultCost)
 	if err != nil {
 		logging.ErrorErr(err, ctx)

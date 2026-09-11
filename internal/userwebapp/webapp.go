@@ -8,6 +8,7 @@ import (
 	"github.com/Kaese72/cloud-user-registry/internal/logging"
 	"github.com/Kaese72/cloud-user-registry/internal/persistence"
 	"github.com/Kaese72/cloud-user-registry/internal/tokens"
+	"github.com/Kaese72/cloud-user-registry/internal/validate"
 	"github.com/Kaese72/cloud-user-registry/restmodels"
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/go-sql-driver/mysql"
@@ -53,6 +54,9 @@ func (app webApp) UpdateMe(ctx context.Context, input *struct {
 	userID, _, err := tokens.FromAuthHeader(app.publicKey, input.Authorization)
 	if err != nil {
 		return nil, huma.Error401Unauthorized("invalid or expired token")
+	}
+	if err := validate.Email(input.Body.Email); err != nil {
+		return nil, huma.Error400BadRequest("invalid email address")
 	}
 	if err := app.persistence.UpdateUser(ctx, userID, input.Body.Name, input.Body.Surname, input.Body.Email); err != nil {
 		if mysqlErr, ok := err.(*mysql.MySQLError); ok && mysqlErr.Number == 1062 {
