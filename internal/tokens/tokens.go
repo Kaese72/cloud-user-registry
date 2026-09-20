@@ -1,7 +1,11 @@
-// Package tokens generates and validates the "use" and "refresh" JWTs
-// issued by this service. A "use" token authenticates a request and is
-// scoped to the group the user is currently interacting with; a "refresh"
-// token is exchanged for a fresh pair without re-entering credentials.
+// Package tokens holds the parts of token handling that are private to this
+// service: parsing its RSA private key and generating/validating the
+// "refresh" JWT, which is exchanged for a fresh token pair without
+// re-entering credentials.
+//
+// The "use" token, the one every other service verifies, is defined in the
+// public cloudtoken package instead, so its format has a single owner that
+// other services can import rather than re-implement.
 //
 // See the "Authentication architecture" section of the authentication
 // service's README for the general use/refresh token model this mirrors;
@@ -14,9 +18,9 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
-	"strings"
 	"time"
 
+	"github.com/Kaese72/cloud-user-registry/cloudtoken"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/pkg/errors"
 )
@@ -46,57 +50,27 @@ func ParseRSAPrivateKey(pemBytes []byte) (*rsa.PrivateKey, error) {
 	}
 }
 
-func GenerateUseToken(privateKey *rsa.PrivateKey, userID int64, groupID int64, expiry time.Duration) (string, error) {
-	claims := jwt.MapClaims{
-		"id":      userID,
-		"groupId": groupID,
-		"exp":     time.Now().Add(expiry).Unix(),
-		"iat":     time.Now().Unix(),
-	}
-	token := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
-	return token.SignedString(privateKey)
-}
-
 func GenerateRefreshToken(secret string, userID int64, groupID int64, expiry time.Duration) (string, error) {
 	claims := jwt.MapClaims{
-		"id":      userID,
-		"groupId": groupID,
-		"exp":     time.Now().Add(expiry).Unix(),
-		"iat":     time.Now().Unix(),
+		cloudtoken.ClaimUserID:  userID,
+		cloudtoken.ClaimGroupID: groupID,
+		"exp":                   time.Now().Add(expiry).Unix(),
+		"iat":                   time.Now().Unix(),
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	return token.SignedString([]byte(secret))
 }
 
 func claimsToIdentity(claims jwt.MapClaims) (userID int64, groupID int64, err error) {
-	idFloat, ok := claims["id"].(float64)
+	idFloat, ok := claims[cloudtoken.ClaimUserID].(float64)
 	if !ok {
 		return 0, 0, errors.New("invalid id claim")
 	}
-	groupIDFloat, ok := claims["groupId"].(float64)
+	groupIDFloat, ok := claims[cloudtoken.ClaimGroupID].(float64)
 	if !ok {
 		return 0, 0, errors.New("invalid groupId claim")
 	}
 	return int64(idFloat), int64(groupIDFloat), nil
-}
-
-// ValidateUseToken verifies the RS256 signature of a use token and returns
-// the userId and groupId embedded in it.
-func ValidateUseToken(publicKey *rsa.PublicKey, tokenString string) (userID int64, groupID int64, err error) {
-	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
-		if _, ok := token.Method.(*jwt.SigningMethodRSA); !ok {
-			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
-		}
-		return publicKey, nil
-	})
-	if err != nil {
-		return 0, 0, err
-	}
-	claims, ok := token.Claims.(jwt.MapClaims)
-	if !ok || !token.Valid {
-		return 0, 0, errors.New("invalid token")
-	}
-	return claimsToIdentity(claims)
 }
 
 // ValidateRefreshToken verifies the HS256 signature of a refresh token and
@@ -116,14 +90,4 @@ func ValidateRefreshToken(secret string, tokenString string) (userID int64, grou
 		return 0, 0, errors.New("invalid token")
 	}
 	return claimsToIdentity(claims)
-}
-
-// FromAuthHeader validates the bearer use token in an "Authorization" header
-// value and returns the userId and groupId embedded in it.
-func FromAuthHeader(publicKey *rsa.PublicKey, authHeader string) (userID int64, groupID int64, err error) {
-	if !strings.HasPrefix(authHeader, "Bearer ") {
-		return 0, 0, errors.New("missing bearer token")
-	}
-	tokenString := strings.TrimSpace(strings.TrimPrefix(authHeader, "Bearer "))
-	return ValidateUseToken(publicKey, tokenString)
 }

@@ -7,6 +7,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/Kaese72/cloud-user-registry/cloudtoken"
 	"github.com/Kaese72/cloud-user-registry/internal/authwebapp"
 	"github.com/Kaese72/cloud-user-registry/internal/config"
 	"github.com/Kaese72/cloud-user-registry/internal/groupwebapp"
@@ -16,7 +17,6 @@ import (
 	"github.com/Kaese72/cloud-user-registry/internal/persistence/mariadb"
 	"github.com/Kaese72/cloud-user-registry/internal/tokens"
 	"github.com/Kaese72/cloud-user-registry/internal/userwebapp"
-	"github.com/Kaese72/huemie-lib/middleware"
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/danielgtaylor/huma/v2/adapters/humamux"
 	"github.com/gorilla/mux"
@@ -56,7 +56,7 @@ func main() {
 	passwordResetApp := passwordresetwebapp.NewWebApp(dbPersistence, mailer.New(config.Loaded.SMTP), config.Loaded.PasswordReset)
 
 	router := mux.NewRouter()
-	router.Use(middleware.UseTokenMiddleware(
+	router.Use(cloudtoken.Middleware(
 		&privateKey.PublicKey,
 		"/cloud-user-registry/v0/registration",
 		"/cloud-user-registry/v0/authentication/login",

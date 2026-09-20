@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/Kaese72/cloud-user-registry/cloudtoken"
 	"github.com/Kaese72/cloud-user-registry/internal/logging"
 	"github.com/Kaese72/cloud-user-registry/internal/persistence"
 	"github.com/Kaese72/cloud-user-registry/internal/tokens"
@@ -57,7 +58,7 @@ func (app webApp) buildRefreshCookie(token string) *http.Cookie {
 }
 
 func (app webApp) issueTokenPair(userID int64, groupID int64) (useToken string, refreshToken string, err error) {
-	useToken, err = tokens.GenerateUseToken(app.privateKey, userID, groupID, app.useTokenExpiry)
+	useToken, err = cloudtoken.Sign(app.privateKey, userID, groupID, app.useTokenExpiry)
 	if err != nil {
 		return
 	}
@@ -167,7 +168,7 @@ func (app webApp) SelectGroup(ctx context.Context, input *struct {
 	Authorization string `header:"Authorization"`
 	GroupID       int64  `path:"groupId"`
 }) (*loginResult, error) {
-	userID, _, err := tokens.FromAuthHeader(&app.privateKey.PublicKey, input.Authorization)
+	userID, _, err := cloudtoken.FromAuthHeader(&app.privateKey.PublicKey, input.Authorization)
 	if err != nil {
 		return nil, huma.Error401Unauthorized("invalid or expired token")
 	}

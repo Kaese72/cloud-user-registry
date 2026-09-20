@@ -5,9 +5,9 @@ import (
 	"crypto/rsa"
 	"database/sql"
 
+	"github.com/Kaese72/cloud-user-registry/cloudtoken"
 	"github.com/Kaese72/cloud-user-registry/internal/logging"
 	"github.com/Kaese72/cloud-user-registry/internal/persistence"
-	"github.com/Kaese72/cloud-user-registry/internal/tokens"
 	"github.com/Kaese72/cloud-user-registry/restmodels"
 	"github.com/danielgtaylor/huma/v2"
 )
@@ -27,7 +27,7 @@ func NewWebApp(p persistenceDB, publicKey *rsa.PublicKey) webApp {
 }
 
 func (app webApp) authenticate(authHeader string) (userID int64, groupID int64, err error) {
-	return tokens.FromAuthHeader(app.publicKey, authHeader)
+	return cloudtoken.FromAuthHeader(app.publicKey, authHeader)
 }
 
 // requireAdmin fetches the caller's membership in groupID and rejects the
@@ -160,7 +160,9 @@ func (app webApp) ListCurrentGroupMembers(ctx context.Context, input *struct {
 	for i, member := range members {
 		resp[i] = toGroupMemberResponse(member)
 	}
-	return &struct{ Body []restmodels.GroupMemberResponse }{Body: resp}, nil
+	return &struct {
+		Body []restmodels.GroupMemberResponse
+	}{Body: resp}, nil
 }
 
 // SetMemberAdmin promotes or demotes another member's admin flag. Only
@@ -290,7 +292,9 @@ func (app webApp) ListMyInvitations(ctx context.Context, input *struct {
 	for i, invitation := range invitations {
 		resp[i] = toInvitationResponse(invitation)
 	}
-	return &struct{ Body []restmodels.InvitationResponse }{Body: resp}, nil
+	return &struct {
+		Body []restmodels.InvitationResponse
+	}{Body: resp}, nil
 }
 
 func (app webApp) AcceptInvitation(ctx context.Context, input *struct {

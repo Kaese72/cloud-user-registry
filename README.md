@@ -38,6 +38,13 @@ If you are an *administrator* of a **Group**, you should be able to invite other
 
 * Data stored in MariaDB
 * JWT provided after authentication contains userId (primary key of **Users**) and groupID (Primary key of **Groups**)
+* This service owns that token format and exports it as the public Go package `github.com/Kaese72/cloud-user-registry/cloudtoken` (part of this module, not a separate one). Go services that need to authenticate cloud callers import it instead of re-implementing the format:
+  * `cloudtoken.FromAuthHeader(publicKey, header)` / `cloudtoken.Verify(publicKey, token)` verify a `use` token and return the user ID and group ID. A token without a valid `id` and `groupId` is rejected, and so is the HS256 refresh token.
+  * `cloudtoken.Middleware(publicKey, skipPrefixes...)` requires a valid `use` token on every request and makes the caller available to handlers via `cloudtoken.UserID(ctx)` and `cloudtoken.GroupID(ctx)`.
+  * `cloudtoken.LoadPublicKeyFromFile(path)` / `cloudtoken.ParsePublicKey(pem)` load this service's PKIX PEM-encoded RSA public key.
+  * `cloudtoken.Sign` issues a `use` token; only this service, which holds the private key, should call it.
+  * This is *not* the authentication service's `use` token (`authentication/usertoken`): that one is issued per appliance, has no group, and is signed with a different key. The refresh token stays private to this service (`internal/tokens`).
+  * The package depends only on the JWT library and `huemie-lib`, so importing it does not pull this service's own dependencies (database driver, SMTP, ...) into the importing service.
 * Link table between **Users** and **Groups**, containing the role of the user (*admin*=`true` or not)
 * Only *admins* can add or remove the *admin* flag on links to **Users** of **Groups** they are *admin* over
 * When a new **Group** is created, the creator (generally via registration) becomes *owner* (tracked in link table) and this can not be changed, even by *admins*

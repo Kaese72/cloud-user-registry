@@ -5,9 +5,9 @@ import (
 	"crypto/rsa"
 	"database/sql"
 
+	"github.com/Kaese72/cloud-user-registry/cloudtoken"
 	"github.com/Kaese72/cloud-user-registry/internal/logging"
 	"github.com/Kaese72/cloud-user-registry/internal/persistence"
-	"github.com/Kaese72/cloud-user-registry/internal/tokens"
 	"github.com/Kaese72/cloud-user-registry/internal/validate"
 	"github.com/Kaese72/cloud-user-registry/restmodels"
 	"github.com/danielgtaylor/huma/v2"
@@ -33,7 +33,7 @@ func (app webApp) GetMe(ctx context.Context, input *struct {
 }) (*struct {
 	Body restmodels.UserResponse
 }, error) {
-	userID, _, err := tokens.FromAuthHeader(app.publicKey, input.Authorization)
+	userID, _, err := cloudtoken.FromAuthHeader(app.publicKey, input.Authorization)
 	if err != nil {
 		return nil, huma.Error401Unauthorized("invalid or expired token")
 	}
@@ -51,7 +51,7 @@ func (app webApp) UpdateMe(ctx context.Context, input *struct {
 }) (*struct {
 	Body restmodels.UserResponse
 }, error) {
-	userID, _, err := tokens.FromAuthHeader(app.publicKey, input.Authorization)
+	userID, _, err := cloudtoken.FromAuthHeader(app.publicKey, input.Authorization)
 	if err != nil {
 		return nil, huma.Error401Unauthorized("invalid or expired token")
 	}
@@ -77,7 +77,7 @@ func (app webApp) UpdateMyPassword(ctx context.Context, input *struct {
 	Authorization string `header:"Authorization"`
 	Body          restmodels.ChangePasswordRequest
 }) (*struct{}, error) {
-	userID, _, err := tokens.FromAuthHeader(app.publicKey, input.Authorization)
+	userID, _, err := cloudtoken.FromAuthHeader(app.publicKey, input.Authorization)
 	if err != nil {
 		return nil, huma.Error401Unauthorized("invalid or expired token")
 	}
