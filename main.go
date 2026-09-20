@@ -62,6 +62,7 @@ func main() {
 		&privateKey.PublicKey,
 		"/cloud-user-registry/v0/registration",
 		"/cloud-user-registry/v0/authentication/login",
+		"/cloud-user-registry/v0/authentication/logout",
 		"/cloud-user-registry/v0/authentication/password-reset",
 		"/cloud-user-registry/docs",
 		"/cloud-user-registry/openapi",
@@ -73,6 +74,7 @@ func main() {
 
 	huma.Post(api, "/cloud-user-registry/v0/registration", authApp.Register)
 	huma.Post(api, "/cloud-user-registry/v0/authentication/login", authApp.Login)
+	huma.Post(api, "/cloud-user-registry/v0/authentication/logout", authApp.Logout)
 	huma.Post(api, "/cloud-user-registry/v0/groups/{groupId:[0-9]+}/select", authApp.SelectGroup)
 
 	huma.Post(api, "/cloud-user-registry/v0/authentication/password-reset", passwordResetApp.RequestReset)

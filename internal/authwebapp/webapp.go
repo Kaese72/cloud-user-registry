@@ -57,6 +57,18 @@ func (app webApp) buildRefreshCookie(token string) *http.Cookie {
 	}
 }
 
+type logoutResult struct {
+	SetCookie string `header:"Set-Cookie"`
+}
+
+// Logout expires the refresh cookie so the browser cannot silently log back in.
+// It needs no authentication: an expired session must still be able to log out.
+func (app webApp) Logout(ctx context.Context, input *struct{}) (*logoutResult, error) {
+	cookie := app.buildRefreshCookie("")
+	cookie.MaxAge = -1
+	return &logoutResult{SetCookie: cookie.String()}, nil
+}
+
 func (app webApp) issueTokenPair(userID int64, groupID int64) (useToken string, refreshToken string, err error) {
 	useToken, err = cloudtoken.Sign(app.privateKey, userID, groupID, app.useTokenExpiry)
 	if err != nil {
