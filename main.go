@@ -11,6 +11,7 @@ import (
 	"github.com/Kaese72/cloud-user-registry/internal/authwebapp"
 	"github.com/Kaese72/cloud-user-registry/internal/config"
 	"github.com/Kaese72/cloud-user-registry/internal/groupwebapp"
+	"github.com/Kaese72/cloud-user-registry/internal/internalwebapp"
 	"github.com/Kaese72/cloud-user-registry/internal/logging"
 	"github.com/Kaese72/cloud-user-registry/internal/mailer"
 	"github.com/Kaese72/cloud-user-registry/internal/passwordresetwebapp"
@@ -54,6 +55,7 @@ func main() {
 	userApp := userwebapp.NewWebApp(dbPersistence, &privateKey.PublicKey)
 	groupApp := groupwebapp.NewWebApp(dbPersistence, &privateKey.PublicKey)
 	passwordResetApp := passwordresetwebapp.NewWebApp(dbPersistence, mailer.New(config.Loaded.SMTP), config.Loaded.PasswordReset)
+	internalApp := internalwebapp.NewWebApp(dbPersistence, internalwebapp.ParseTokenList(config.Loaded.Auth.ServiceTokens))
 
 	router := mux.NewRouter()
 	router.Use(cloudtoken.Middleware(
@@ -91,6 +93,21 @@ func main() {
 	huma.Get(api, "/cloud-user-registry/v0/invitations", groupApp.ListMyInvitations)
 	huma.Post(api, "/cloud-user-registry/v0/invitations/{invitationId:[0-9]+}/accept", groupApp.AcceptInvitation)
 	huma.Post(api, "/cloud-user-registry/v0/invitations/{invitationId:[0-9]+}/decline", groupApp.DeclineInvitation)
+
+	// Internal-only API for other cloud services, on its own port so the
+	// public ingress can never route to it.
+	internalRouter := mux.NewRouter()
+	internalHumaConfig := huma.DefaultConfig("cloud-user-registry-internal", "1.0.0")
+	internalHumaConfig.OpenAPIPath = "/cloud-user-registry/internal/openapi"
+	internalHumaConfig.DocsPath = ""
+	internalAPI := humamux.New(internalRouter, internalHumaConfig)
+	huma.Get(internalAPI, "/cloud-user-registry/v0/internal/groups/{groupId:[0-9]+}/members/{userId:[0-9]+}", internalApp.GetGroupMember)
+	go func() {
+		if err := http.ListenAndServe(fmt.Sprintf(":%d", config.Loaded.InternalPort), internalRouter); err != nil {
+			logging.Error(err.Error(), context.TODO())
+			os.Exit(1)
+		}
+	}()
 
 	if err := http.ListenAndServe(fmt.Sprintf(":%d", config.Loaded.Port), router); err != nil {
 		logging.Error(err.Error(), context.TODO())

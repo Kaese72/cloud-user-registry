@@ -31,6 +31,10 @@ type AuthConfig struct {
 	RefreshSecret          string `json:"refresh-secret" mapstructure:"refresh-secret"`
 	UseTokenExpiryMinutes  int    `json:"use-token-expiry-minutes" mapstructure:"use-token-expiry-minutes"`
 	RefreshTokenExpiryDays int    `json:"refresh-token-expiry-days" mapstructure:"refresh-token-expiry-days"`
+	// ServiceTokens is a comma-separated list of static bearer tokens other
+	// cloud services (appliance-registry) use to call the internal endpoints.
+	// A list so a token can be rotated without a synchronized cutover.
+	ServiceTokens string `json:"service-tokens" mapstructure:"service-tokens"`
 }
 
 func (conf AuthConfig) Validate() error {
@@ -39,6 +43,9 @@ func (conf AuthConfig) Validate() error {
 	}
 	if conf.RefreshSecret == "" {
 		return errors.New("must supply auth refresh-secret")
+	}
+	if conf.ServiceTokens == "" {
+		return errors.New("must supply auth service-tokens")
 	}
 	return nil
 }
@@ -84,6 +91,12 @@ type Config struct {
 	SMTP          SMTPConfig          `json:"smtp" mapstructure:"smtp"`
 	PasswordReset PasswordResetConfig `json:"password-reset" mapstructure:"password-reset"`
 	Port          int                 `json:"port" mapstructure:"port"`
+	// InternalPort serves the endpoints meant only for other cloud services
+	// (see internalwebapp). It is deliberately a separate listener from Port:
+	// the public ingress routes to Port and never to this one, so these
+	// endpoints are not reachable from the internet at all, and the service
+	// token is defence in depth rather than the only barrier.
+	InternalPort int `json:"internal-port" mapstructure:"internal-port"`
 }
 
 func (conf Config) Validate() error {
@@ -122,6 +135,7 @@ func init() {
 	viper.SetDefault("auth.use-token-expiry-minutes", 10)
 	viper.BindEnv("auth.refresh-token-expiry-days")
 	viper.SetDefault("auth.refresh-token-expiry-days", 7)
+	viper.BindEnv("auth.service-tokens")
 
 	viper.BindEnv("smtp.host")
 	viper.BindEnv("smtp.port")
@@ -140,6 +154,8 @@ func init() {
 
 	viper.BindEnv("port")
 	viper.SetDefault("port", 8080)
+	viper.BindEnv("internal-port")
+	viper.SetDefault("internal-port", 8081)
 
 	err := viper.Unmarshal(&Loaded)
 	if err != nil {
